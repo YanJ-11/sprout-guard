@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#eff0da">
+  <meta name="description" content="萌芽小院：奶油绘本风植物塔防小游戏。收集阳光，种下植物，和可爱的小伙伴守护花园。支持电脑与手机横屏。">
+  <title>萌芽小院 · 一起守护好天气</title>
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="site-header">
+      <button id="brand" class="brand" aria-label="返回萌芽小院首页"><svg viewBox="0 0 36 38" aria-hidden="true"><path d="M18 34V17M18 23C2 24 2 6 3 6c14-2 19 7 15 17ZM19 17C16 5 25 1 33 3c1 9-5 16-14 14Z" fill="#a7ba83" stroke="#4c644a" stroke-width="2.2" stroke-linejoin="round"/></svg><span>萌芽小院<small>SPROUT & GUARD</small></span></button>
+      <div class="header-actions"><span class="header-note">给生活，种一点可爱</span><button class="icon-btn" id="sound" title="开启音效" aria-label="开启音效">♫<span class="sound-dot"></span></button><button class="icon-btn" id="fullscreen" title="全屏游玩" aria-label="全屏游玩">⛶</button><button class="help-btn" id="help">玩法说明 <span>?</span></button></div>
+    </header>
+
+    <main id="home" class="home-view">
+      <section class="hero">
+        <div class="hero-copy"><div class="eyebrow"><span></span> 欢迎来到你的治愈系小花园</div><h1>小小植物，<br>大大的<span class="courage">勇气<svg viewBox="0 0 200 16" aria-hidden="true"><path d="M5 9Q90-4 194 8M27 14Q123 6 179 12"/></svg></span>。</h1><p>收集一缕阳光，种下一位小伙伴。<br>呆萌僵尸来串门啦，一起守护这片好天气！</p><button id="start" class="primary-btn">开始守护 <span>↗</span></button><div class="hero-meta"><span class="tiny-sun">☀</span> 经典种植塔防 <i>·</i> 两段花园冒险 <i>·</i> 横屏更好玩</div></div>
+        <div class="hero-art"><canvas id="hero-canvas" width="700" height="460" aria-label="向日葵和豌豆射手在绘本花园中迎接呆萌僵尸"></canvas><span class="art-label"><span>✿</span> 今天，也是适合发芽的一天</span><span class="hero-seal">100%<br><small>勇气发芽</small></span></div>
+      </section>
+      <section class="adventures" aria-label="选择关卡"><div class="section-intro"><h2>两片小天地，等你来守护 <span>✧</span></h2><p>选一个好天气，开始今天的冒险。</p></div><div class="level-grid">
+        <button class="level-card selected" data-level="1"><div class="level-thumb day"><span class="mini-sun"></span><span class="hill h1"></span><span class="hill h2"></span><span class="mini-house">⌂</span><span class="mini-flower">✿</span></div><div class="level-copy"><span class="level-tag">CHAPTER 01 <b>初次见面</b></span><h3>晴日小院 <span class="completion" id="complete-1"></span></h3><p>阳光正好，从一颗种子开始。</p><div class="level-spec">3 波进攻 <span>·</span> 约 3 分钟 <span>·</span> 轻松入门</div></div><span class="level-arrow">↗</span></button>
+        <button class="level-card" data-level="2"><div class="level-thumb dusk"><span class="mini-sun"></span><span class="hill h1"></span><span class="hill h2"></span><span class="mini-house">⌂</span><span class="mini-flower">✿</span></div><div class="level-copy"><span class="level-tag">CHAPTER 02 <b>勇敢一点</b></span><h3>落日花园 <span class="completion" id="complete-2"></span></h3><p>晚霞来信，新朋友也来敲门。</p><div class="level-spec">4 波进攻 <span>·</span> 约 4 分钟 <span>·</span> 进阶挑战</div></div><span class="level-arrow">↗</span></button>
+      </div></section>
+      <footer class="home-footer"><span>一株小勇气，守住好天气。</span><span>原创绘本角色 <span class="footer-flower">✿</span> 用一点耐心，让花园长大</span></footer>
+    </main>
+
+    <main id="battle" class="battle-view" hidden>
+      <div class="game-shell" id="game-shell">
+        <canvas id="game-canvas" width="1120" height="650" aria-label="5行9列花园。选择植物卡后点击草坪种植。点击阳光收集。" tabindex="0"></canvas>
+        <div class="game-top"><div class="sun-counter"><canvas id="sun-icon" width="50" height="50"></canvas><div><small>我的阳光</small><strong id="sun-count">150</strong></div></div><div class="level-heading"><small id="chapter-label">CHAPTER 01</small><h2 id="level-name">晴日小院</h2></div><div class="wave-box"><div><span id="wave-label">正在准备花园…</span><span id="wave-count">0 / 3 波</span></div><div class="progress-track"><div id="wave-progress"></div><span>⚑</span></div></div><button id="pause" class="pause-btn" aria-label="暂停游戏">Ⅱ</button></div>
+        <div class="seed-bank" id="seed-bank" aria-label="植物卡牌"></div>
+        <div class="garden-caption">种下一点勇气 <span>↓</span></div>
+        <div class="battle-bottom"><button id="shovel" class="shovel-btn" title="铲除植物（快捷键6）"><svg viewBox="0 0 26 30" aria-hidden="true"><path d="m17 2 7 5-5 7-7-5Z" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="m15 12-7 10" stroke="#956d48" stroke-width="4"/><path d="m6 18 7 5-5 6-6-2v-6Z" fill="#a9b7b2" stroke="#5b6760" stroke-width="1.5"/></svg><span>铲子</span><kbd>6</kbd></button><p id="plant-hint">先种向日葵，让阳光多起来。</p><span class="battle-tip">点击阳光即可收集</span></div>
+        <div id="toast" class="toast" role="status"></div>
+        <div id="wave-banner" class="wave-banner"><span>✦</span><div></div><span>✦</span></div>
+      </div>
+      <div class="under-game"><span><b>小院贴士</b> 向日葵放后排，射手守中间，坚果挡前面。</span><span>快捷键 1–5 选植物 · 6 铲子 · 空格暂停</span></div>
+    </main>
+
+    <div id="modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-card"><button id="modal-close" class="modal-close" aria-label="关闭弹窗">×</button><div id="modal-content"></div></div></div>
+    <div id="rotate-tip" class="rotate-tip"><div class="rotate-phone">↻</div><h2>把花园横过来吧</h2><p>横屏后，五条草坪就能完整铺开啦。</p><button id="portrait-back">先回小院首页</button></div>
+    <noscript>请开启浏览器 JavaScript 后游玩萌芽小院。</noscript>
+  </div>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
