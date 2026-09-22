@@ -12,23 +12,29 @@ const dpr=Math.min(devicePixelRatio||1,2);
 canvas.width=1120*dpr;canvas.height=650*dpr;ctx.scale(dpr,dpr);
 hero.width=700*dpr;hero.height=460*dpr;hctx.scale(dpr,dpr);
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
-let background=null, lastBackgroundMode='scene';
+let background=null, lastBackgroundMode='scene', fullscreenRequest=0, fullscreenExitPending=null, fullscreenIntent='idle';
 
 function isPhoneViewport(){return navigator.maxTouchPoints>0||matchMedia('(pointer:coarse)').matches||Math.min(innerWidth,innerHeight)<=700}
-function isGameFullscreen(){return Boolean(document.fullscreenElement)||document.body.classList.contains('game-fullscreen-fallback')}
+function isGameFullscreen(){return view==='battle'&&(Boolean(document.fullscreenElement)||document.body.classList.contains('game-fullscreen-fallback'))}
 function isPortraitBlocked(){return matchMedia('(orientation: portrait)').matches&&!isGameFullscreen()}
 function syncFullscreenState(){
-  const native=Boolean(document.fullscreenElement), active=native||document.body.classList.contains('game-fullscreen-fallback');
-  // Fullscreen can be entered even when an embedded Android browser refuses
-  // orientation.lock(). Keep the logical canvas upright and let it fill the
-  // available viewport instead of rotating it into a clipped portrait box.
-  const rotated=false;
-  document.body.classList.toggle('is-fullscreen',native);
+  const native=Boolean(document.fullscreenElement), active=view==='battle'&&(native||document.body.classList.contains('game-fullscreen-fallback'));
+  // A locked portrait WebView still gets a landscape game. Its canvas and
+  // dialogs rotate together; pointer coordinates are inverted in point().
+  const rotated=active&&matchMedia('(orientation: portrait)').matches;
+  // A pending fullscreen request can resolve after returning home. Scope the
+  // page class to the battle view so a stale native fullscreen state cannot
+  // hide the home header or leave the home screen clipped.
+  document.body.classList.toggle('is-fullscreen',active&&native);
   document.body.classList.toggle('game-rotated',rotated);
+  const width=rotated?innerHeight:innerWidth, height=rotated?innerWidth:innerHeight;
+  document.documentElement.style.setProperty('--play-width',`${width}px`);
+  document.documentElement.style.setProperty('--play-height',`${height}px`);
+  document.documentElement.style.setProperty('--play-unit',`${Math.min(width/1120,height/650)}px`);
   const mode=active?'grass':'scene';
   if(game&&mode!==lastBackgroundMode){background=buildBackground(game.level.id,{grassOnly:mode==='grass'});lastBackgroundMode=mode}
   updateFullscreenControls();
-  if(game?.status==='playing'&&$('modal').hidden) paused=isPortraitBlocked()&&!active;
+  if(game?.status==='playing'&&$('modal').hidden&&!document.hidden) paused=isPortraitBlocked()&&!active;
 }
 function updateFullscreenControls(){
   const active=isGameFullscreen(), button=$('game-fullscreen');
@@ -38,25 +44,66 @@ function updateFullscreenControls(){
   button.title=button.getAttribute('aria-label');
 }
 async function enterGameFullscreen(){
+  const request=++fullscreenRequest;
+  if(view!=='battle')return false;
+  fullscreenIntent='enter';
+  // Returning home starts an asynchronous native exit. If a new game starts
+  // before that transition completes, wait for it instead of mistaking the
+  // still-present fullscreen element for the new game's fullscreen session.
+  if(fullscreenExitPending){try{await fullscreenExitPending}catch{}if(request!==fullscreenRequest||view!=='battle')return false}
   if(document.fullscreenElement){syncFullscreenState();return true}
   document.body.classList.add('game-fullscreen-fallback');
   syncFullscreenState();
   try{
     if(!document.documentElement.requestFullscreen)throw new Error('fullscreen unavailable');
     await document.documentElement.requestFullscreen({navigationUI:'hide'});
+    // The user may have left the game, or requested exit/re-entry, while the
+    // browser was resolving requestFullscreen(). The newer operation owns the
+    // fullscreen state; do not let this stale request exit it underneath that
+    // operation.
+    if(request!==fullscreenRequest||view!=='battle'){
+      // requestFullscreen() may resolve after goHome() already attempted to
+      // exit, in which case the native element did not exist at exit time.
+      // Complete that stale exit here. A newer enter intent takes ownership
+      // and deliberately skips this cleanup.
+      if(fullscreenIntent==='exit'&&document.fullscreenElement){
+        if(fullscreenExitPending){try{await fullscreenExitPending}catch{}}
+        else{
+          let pending=null;
+          try{pending=document.exitFullscreen();fullscreenExitPending=pending;await pending}catch{}
+          finally{if(fullscreenExitPending===pending)fullscreenExitPending=null}
+        }
+      }
+      return false;
+    }
     document.body.classList.remove('game-fullscreen-fallback');
     syncFullscreenState();
     try{await screen.orientation.lock('landscape')}catch{}
+    if(request!==fullscreenRequest||view!=='battle')return false;
     return true;
   }catch{
-    syncFullscreenState();
+    if(request===fullscreenRequest)syncFullscreenState();
     return false;
   }
 }
 async function exitGameFullscreen(){
+  const request=++fullscreenRequest;
+  fullscreenIntent='exit';
   document.body.classList.remove('game-fullscreen-fallback');
-  try{if(document.fullscreenElement)await document.exitFullscreen()}catch{}
+  try{screen.orientation?.unlock?.()}catch{}
+  // Apply the non-fullscreen layout immediately. This matters when goHome()
+  // changes view before the browser's asynchronous exit event arrives.
   syncFullscreenState();
+  let pending=null;
+  try{
+    if(document.fullscreenElement){
+      pending=document.exitFullscreen();
+      fullscreenExitPending=pending;
+      await pending;
+    }
+  }catch{}
+  finally{if(fullscreenExitPending===pending)fullscreenExitPending=null}
+  if(request===fullscreenRequest)syncFullscreenState();
 }
 
 function rr(c,x,y,w,h,r,fill,stroke=null,lw=1){c.beginPath();c.roundRect(x,y,w,h,r);if(fill){c.fillStyle=fill;c.fill()}if(stroke){c.strokeStyle=stroke;c.lineWidth=lw;c.stroke()}}
@@ -156,7 +203,18 @@ function onEvent(e){if(e.type==='wave')banner(`第 ${e.wave||game?.wave||1} 波�
 function startGame(level=1){
   closeModal(false);game=new Game(level,{onEvent});background=buildBackground(level);lastBackgroundMode='scene';view='battle';selected=null;hover=null;paused=false;flyers=[];hudStamp='';$('home').hidden=true;$('battle').hidden=false;document.body.classList.add('is-playing');document.querySelector('.site-header').classList.add('compact');$('level-name').textContent=game.level.name;$('chapter-label').textContent=`CHAPTER 0${level}`;updateSelection();updateHUD();bannerLeft=0;$('wave-banner').classList.remove('show');toast('先种 2 株向日葵，再给来访的那一行种上射手。');initAudio();canvas.focus({preventScroll:true});syncFullscreenState();if(isPhoneViewport())enterGameFullscreen();else if(isPortraitBlocked())paused=true;
 }
-function goHome(){exitGameFullscreen();closeModal(false);view='home';game=null;paused=false;selected=null;hover=null;$('home').hidden=false;$('battle').hidden=true;document.body.classList.remove('is-playing');document.querySelector('.site-header').classList.remove('compact');refreshCompleted();$('start').focus({preventScroll:true})}
+function goHome(){
+  // Switch the app state before awaiting browser fullscreen teardown. This
+  // makes a fast “返回小院 → 开始守护” sequence deterministic: the old exit
+  // operation cannot restore the previous battle layout over the new game.
+  closeModal(false);
+  view='home';game=null;paused=false;selected=null;hover=null;
+  $('home').hidden=false;$('battle').hidden=true;
+  document.body.classList.remove('is-playing');
+  document.querySelector('.site-header').classList.remove('compact');
+  refreshCompleted();$('start').focus({preventScroll:true});
+  void exitGameFullscreen();
+}
 function refreshCompleted(){for(const id of [1,2])$(`complete-${id}`).textContent=completed.includes(id)?'✓ 已守护':''}
 function showModal(type,html){returnFocus=document.activeElement;modalType=type;$('modal-content').innerHTML=html;$('modal').hidden=false;$('modal-close').hidden=type==='result';if(game?.status==='playing')paused=true;requestAnimationFrame(()=>($('modal-content').querySelector('button')||$('modal-close')).focus({preventScroll:true}))}
 function closeModal(resume=true){$('modal').hidden=true;modalType='';if(resume&&game?.status==='playing'&&!isPortraitBlocked())paused=false;returnFocus?.focus?.({preventScroll:true})}
@@ -187,7 +245,8 @@ document.addEventListener('keydown',e=>{
   if(e.code==='Space'){e.preventDefault();showPause()}else if(e.key==='Escape'){selected=null;updateSelection()}else if('12345'.includes(e.key)&&e.key.length===1){e.preventDefault();select(types[Number(e.key)-1])}else if(e.key==='6'){e.preventDefault();select('shovel')}
 });
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&game?.status==='playing'&&!paused)showPause()});
-document.addEventListener('fullscreenchange',syncFullscreenState);
+document.addEventListener('fullscreenchange',()=>{syncFullscreenState();if(view==='battle'&&!document.fullscreenElement&&!document.body.classList.contains('game-fullscreen-fallback')&&game?.status==='playing'&&$('modal').hidden)showPause()});
+window.addEventListener('resize',syncFullscreenState);
 const portrait=matchMedia('(orientation: portrait)');portrait.addEventListener('change',()=>syncFullscreenState());
-function frame(ms){const dt=Math.min(.05,(ms-last)/1000||0);last=ms;artTime+=dt;if(view==='home'){renderHero(reduced?0:artTime)}else if(game){if(!paused)game.update(dt);flyers.forEach(f=>f.age+=paused?0:dt);flyers=flyers.filter(f=>f.age<.7);if(toastLeft>0){toastLeft-=dt;if(toastLeft<=0)$('toast').classList.remove('show')}if(bannerLeft>0&&!paused){bannerLeft-=dt;if(bannerLeft<=0)$('wave-banner').classList.remove('show')}renderGame(reduced?0:game.time);updateHUD()}requestAnimationFrame(frame)}
+function frame(ms){const dt=Math.min(.05,(ms-last)/1000||0);last=ms;artTime+=dt;const hidden=document.hidden;if(view==='home'){renderHero(reduced?0:artTime)}else if(game){if(!paused&&!hidden)game.update(dt);flyers.forEach(f=>f.age+=paused||hidden?0:dt);flyers=flyers.filter(f=>f.age<.7);if(toastLeft>0&&!hidden){toastLeft-=dt;if(toastLeft<=0)$('toast').classList.remove('show')}if(bannerLeft>0&&!paused&&!hidden){bannerLeft-=dt;if(bannerLeft<=0)$('wave-banner').classList.remove('show')}renderGame(reduced?0:game.time);updateHUD()}requestAnimationFrame(frame)}
 initCards();updateSoundButton();updateFullscreenControls();refreshCompleted();requestAnimationFrame(frame);

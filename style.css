@@ -17,10 +17,52 @@ html:fullscreen,html:fullscreen body,html:fullscreen #app{width:100%;height:100%
 body.is-fullscreen,body.game-fullscreen-fallback{overflow:hidden;background:#b5c78e}
 body.is-fullscreen .site-header,body.is-fullscreen .under-game,body.game-fullscreen-fallback .site-header,body.game-fullscreen-fallback .under-game{display:none!important}
 body.is-fullscreen .battle-view,body.game-fullscreen-fallback .battle-view{position:fixed;inset:0;width:100vw;height:100dvh;padding:0;background:#b5c78e;z-index:20}
-body.is-fullscreen .game-shell,body.game-fullscreen-fallback .game-shell{width:100vw;height:100dvh;max-width:none;aspect-ratio:auto;margin:0;border:0;border-radius:0;box-shadow:none;background:#b5c78e}
+body.is-fullscreen .game-shell,body.game-fullscreen-fallback .game-shell{max-width:none;aspect-ratio:auto;border:0;border-radius:0;box-shadow:none;background:#b5c78e}
 body.is-fullscreen .rotate-tip,body.game-fullscreen-fallback .rotate-tip{display:none!important}
-body.game-rotated .battle-view{width:100dvh;height:100dvw;inset:auto;left:0;top:0}
-body.game-rotated .game-shell{position:fixed;left:100dvw;top:0;width:100dvh;height:100dvw;max-width:none;aspect-ratio:auto;margin:0;border:0;border-radius:0;box-shadow:none;transform:rotate(90deg);transform-origin:top left}
-.fullscreen-mini{display:none}
+.fullscreen-mini{display:none;pointer-events:none}
 body.is-fullscreen .fullscreen-mini,body.game-fullscreen-fallback .fullscreen-mini{display:grid}
-body.game-rotated .battle-view,body.game-rotated .game-shell{position:fixed;inset:0;left:0;top:0;width:100vw;height:100dvh;transform:none}
+body.is-fullscreen .fullscreen-mini,body.game-fullscreen-fallback .fullscreen-mini{pointer-events:auto}
+
+/* Keep fullscreen variables available before the first resize/start event. The
+   game updates these values from the real viewport as soon as play begins. */
+:root{--play-width:100vw;--play-height:100dvh;--play-unit:1px}
+
+/* Keep the board proportional on wide phones; the surrounding ground is grass,
+   without a separate frame. Controls scale with the shorter viewport side. */
+/* Keep the 1120×650 garden proportional. The viewport around it is still
+   grass, so fitting the board leaves a soft grass margin instead of a frame
+   or a stretched lawn. */
+body:is(.is-fullscreen,.game-fullscreen-fallback) .game-shell{width:min(var(--play-width),calc(var(--play-height) * 1.723077));height:min(var(--play-height),calc(var(--play-width) / 1.723077));margin:auto}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .game-top{left:max(3%,env(safe-area-inset-left));right:max(3%,env(safe-area-inset-right));gap:calc(20 * var(--play-unit));top:4%}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .seed-bank{top:23.84%;height:63.1%;gap:1.2%;}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .seed-card{height:19%;box-shadow:none}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .seed-card canvas{width:calc(60 * var(--play-unit));height:calc(64 * var(--play-unit));}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .seed-name{font-size:max(9px,calc(12 * var(--play-unit)))}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .seed-price{font-size:max(10px,calc(14 * var(--play-unit)))}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .seed-price:before{font-size:inherit}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .seed-card .key{display:none}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .cooldown-text{font-size:8px}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .sun-counter{min-width:calc(114 * var(--play-unit));}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .sun-counter canvas{width:calc(48 * var(--play-unit));height:calc(48 * var(--play-unit))}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .sun-counter strong{font-size:max(16px,calc(28 * var(--play-unit)))}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .sun-counter small{font-size:max(7px,calc(9 * var(--play-unit)))}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .level-heading h2{font-size:max(12px,calc(21 * var(--play-unit)))}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .level-heading small{font-size:7px}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .pause-btn{width:max(32px,calc(46 * var(--play-unit)));height:max(32px,calc(46 * var(--play-unit)));font-size:21px;margin-left:0;display:grid;place-content:center}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .wave-box>div:first-child{font-size:max(8px,calc(10 * var(--play-unit)))}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .garden-caption{font-size:max(7px,calc(9 * var(--play-unit)))}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .battle-bottom{height:7%;bottom:2%;}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .shovel-btn{height:100%;min-height:0;font-size:max(9px,calc(11 * var(--play-unit)))}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .shovel-btn svg{height:calc(25 * var(--play-unit));width:calc(25 * var(--play-unit))}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .battle-bottom p{font-size:max(9px,calc(11 * var(--play-unit)))}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .battle-tip{display:none}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .toast{font-size:max(10px,calc(12 * var(--play-unit)));padding:7px 16px;top:16%}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .modal{padding:10px}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .modal-card{width:min(600px,calc(var(--play-width) - 24px));max-height:calc(var(--play-height) - 24px);padding:20px 26px}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .modal h2{font-size:22px;margin:8px 0}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .modal-illustration{height:62px}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .modal-actions{margin-top:16px;gap:10px}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .modal .eyebrow{margin-bottom:8px}
+body:is(.is-fullscreen,.game-fullscreen-fallback) .modal p{margin:6px 0}
+body.game-rotated .battle-view,body.game-rotated .modal{position:fixed;inset:auto;left:100vw;top:0;width:var(--play-width);height:var(--play-height);transform:rotate(90deg);transform-origin:top left}
+body.game-rotated .game-shell{position:relative;inset:auto;transform:none;}
