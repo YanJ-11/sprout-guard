@@ -10,3 +10,17 @@
 .modal-illustration{object-fit:contain}
 @media(orientation:portrait){body.is-playing .rotate-tip{display:flex}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+
+/* Phone play mode: the garden becomes the viewport itself. The fallback is used by
+   embedded Android browsers that refuse the Fullscreen API. */
+html:fullscreen,html:fullscreen body,html:fullscreen #app{width:100%;height:100%;overflow:hidden}
+body.is-fullscreen,body.game-fullscreen-fallback{overflow:hidden;background:#b5c78e}
+body.is-fullscreen .site-header,body.is-fullscreen .under-game,body.game-fullscreen-fallback .site-header,body.game-fullscreen-fallback .under-game{display:none!important}
+body.is-fullscreen .battle-view,body.game-fullscreen-fallback .battle-view{position:fixed;inset:0;width:100vw;height:100dvh;padding:0;background:#b5c78e;z-index:20}
+body.is-fullscreen .game-shell,body.game-fullscreen-fallback .game-shell{width:100vw;height:100dvh;max-width:none;aspect-ratio:auto;margin:0;border:0;border-radius:0;box-shadow:none;background:#b5c78e}
+body.is-fullscreen .rotate-tip,body.game-fullscreen-fallback .rotate-tip{display:none!important}
+body.game-rotated .battle-view{width:100dvh;height:100dvw;inset:auto;left:0;top:0}
+body.game-rotated .game-shell{position:fixed;left:100dvw;top:0;width:100dvh;height:100dvw;max-width:none;aspect-ratio:auto;margin:0;border:0;border-radius:0;box-shadow:none;transform:rotate(90deg);transform-origin:top left}
+.fullscreen-mini{display:none}
+body.is-fullscreen .fullscreen-mini,body.game-fullscreen-fallback .fullscreen-mini{display:grid}
+body.game-rotated .battle-view,body.game-rotated .game-shell{position:fixed;inset:0;left:0;top:0;width:100vw;height:100dvh;transform:none}

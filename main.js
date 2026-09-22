@@ -12,7 +12,52 @@ const dpr=Math.min(devicePixelRatio||1,2);
 canvas.width=1120*dpr;canvas.height=650*dpr;ctx.scale(dpr,dpr);
 hero.width=700*dpr;hero.height=460*dpr;hctx.scale(dpr,dpr);
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
-let background=null;
+let background=null, lastBackgroundMode='scene';
+
+function isPhoneViewport(){return navigator.maxTouchPoints>0||matchMedia('(pointer:coarse)').matches||Math.min(innerWidth,innerHeight)<=700}
+function isGameFullscreen(){return Boolean(document.fullscreenElement)||document.body.classList.contains('game-fullscreen-fallback')}
+function isPortraitBlocked(){return matchMedia('(orientation: portrait)').matches&&!isGameFullscreen()}
+function syncFullscreenState(){
+  const native=Boolean(document.fullscreenElement), active=native||document.body.classList.contains('game-fullscreen-fallback');
+  // Fullscreen can be entered even when an embedded Android browser refuses
+  // orientation.lock(). Keep the logical canvas upright and let it fill the
+  // available viewport instead of rotating it into a clipped portrait box.
+  const rotated=false;
+  document.body.classList.toggle('is-fullscreen',native);
+  document.body.classList.toggle('game-rotated',rotated);
+  const mode=active?'grass':'scene';
+  if(game&&mode!==lastBackgroundMode){background=buildBackground(game.level.id,{grassOnly:mode==='grass'});lastBackgroundMode=mode}
+  updateFullscreenControls();
+  if(game?.status==='playing'&&$('modal').hidden) paused=isPortraitBlocked()&&!active;
+}
+function updateFullscreenControls(){
+  const active=isGameFullscreen(), button=$('game-fullscreen');
+  if(!button)return;
+  button.textContent=active?'↙':'⛶';
+  button.setAttribute('aria-label',active?'退出全屏':'进入全屏');
+  button.title=button.getAttribute('aria-label');
+}
+async function enterGameFullscreen(){
+  if(document.fullscreenElement){syncFullscreenState();return true}
+  document.body.classList.add('game-fullscreen-fallback');
+  syncFullscreenState();
+  try{
+    if(!document.documentElement.requestFullscreen)throw new Error('fullscreen unavailable');
+    await document.documentElement.requestFullscreen({navigationUI:'hide'});
+    document.body.classList.remove('game-fullscreen-fallback');
+    syncFullscreenState();
+    try{await screen.orientation.lock('landscape')}catch{}
+    return true;
+  }catch{
+    syncFullscreenState();
+    return false;
+  }
+}
+async function exitGameFullscreen(){
+  document.body.classList.remove('game-fullscreen-fallback');
+  try{if(document.fullscreenElement)await document.exitFullscreen()}catch{}
+  syncFullscreenState();
+}
 
 function rr(c,x,y,w,h,r,fill,stroke=null,lw=1){c.beginPath();c.roundRect(x,y,w,h,r);if(fill){c.fillStyle=fill;c.fill()}if(stroke){c.strokeStyle=stroke;c.lineWidth=lw;c.stroke()}}
 function ellipse(c,x,y,rx,ry,fill){c.beginPath();c.ellipse(x,y,rx,ry,0,0,Math.PI*2);c.fillStyle=fill;c.fill()}
@@ -40,8 +85,17 @@ function renderHero(t){
   line(c,[[566,177],[568,167]],'#c3b176',2);line(c,[[562,172],[572,172]],'#c3b176',2);
 }
 
-function buildBackground(level){
+function buildBackground(level,{grassOnly=false}={}){
   const bg=document.createElement('canvas');bg.width=1120*dpr;bg.height=650*dpr;const c=bg.getContext('2d');c.scale(dpr,dpr);const dusk=level===2;
+  if(grassOnly){
+    c.fillStyle=dusk?'#b5bd8d':'#b5c78e';c.fillRect(0,0,1120,650);
+    for(let row=0;row<5;row++)for(let col=0;col<9;col++){
+      const x=210+col*86,y=155+row*82;c.fillStyle=dusk?((row+col)%2?'#c2c79b':'#b9c18e'):((row+col)%2?'#c8d8a4':'#bdcf97');c.fillRect(x,y,86,82);
+      c.strokeStyle=dusk?'#aeb78735':'#aabf8530';c.lineWidth=1;c.strokeRect(x+.5,y+.5,86,82);
+      for(let j=0;j<3;j++){const px=x+15+((row*17+col*13+j*21)%59),py=y+17+((row*29+col*19+j*14)%52);line(c,[[px-3,py+1],[px-1,py-3],[px+1,py+1],[px+3,py-2]],dusk?'#abb78365':'#a9bf7f65',1.3)}
+    }
+    return bg;
+  }
   c.fillStyle=dusk?'#e9e1c9':'#e9eed4';c.fillRect(0,0,1120,650);
   const sky=c.createLinearGradient(0,0,0,150);sky.addColorStop(0,dusk?'#efdfc8':'#eff2dc');sky.addColorStop(1,dusk?'#e5dec3':'#e1e9c6');c.fillStyle=sky;c.fillRect(0,0,1120,153);
   ellipse(c,982,141,146,45,dusk?'#c6caa6':'#c8d5ac');ellipse(c,190,133,117,35,dusk?'#d3d0ac':'#d6dfb8');
@@ -100,12 +154,12 @@ function toast(message){$('toast').textContent=message;$('toast').classList.add(
 function banner(message){$('wave-banner').querySelector('div').textContent=message;$('wave-banner').classList.add('show');bannerLeft=3}
 function onEvent(e){if(e.type==='wave')banner(`第 ${e.wave||game?.wave||1} 波小访客来了！`);if(e.type==='mower')toast('小推车出动！这一行再多守一会儿。');if(e.type==='win'||e.type==='lose')queueMicrotask(()=>showResult(e.type==='win'));playSound(e.type)}
 function startGame(level=1){
-  closeModal(false);game=new Game(level,{onEvent});background=buildBackground(level);view='battle';selected=null;hover=null;paused=false;flyers=[];hudStamp='';$('home').hidden=true;$('battle').hidden=false;document.body.classList.add('is-playing');document.querySelector('.site-header').classList.add('compact');$('level-name').textContent=game.level.name;$('chapter-label').textContent=`CHAPTER 0${level}`;updateSelection();updateHUD();bannerLeft=0;$('wave-banner').classList.remove('show');toast('先种 2 株向日葵，再给来访的那一行种上射手。');initAudio();canvas.focus({preventScroll:true});if(matchMedia('(orientation: portrait)').matches)paused=true;
+  closeModal(false);game=new Game(level,{onEvent});background=buildBackground(level);lastBackgroundMode='scene';view='battle';selected=null;hover=null;paused=false;flyers=[];hudStamp='';$('home').hidden=true;$('battle').hidden=false;document.body.classList.add('is-playing');document.querySelector('.site-header').classList.add('compact');$('level-name').textContent=game.level.name;$('chapter-label').textContent=`CHAPTER 0${level}`;updateSelection();updateHUD();bannerLeft=0;$('wave-banner').classList.remove('show');toast('先种 2 株向日葵，再给来访的那一行种上射手。');initAudio();canvas.focus({preventScroll:true});syncFullscreenState();if(isPhoneViewport())enterGameFullscreen();else if(isPortraitBlocked())paused=true;
 }
-function goHome(){closeModal(false);view='home';game=null;paused=false;selected=null;hover=null;$('home').hidden=false;$('battle').hidden=true;document.body.classList.remove('is-playing');document.querySelector('.site-header').classList.remove('compact');refreshCompleted();$('start').focus({preventScroll:true})}
+function goHome(){exitGameFullscreen();closeModal(false);view='home';game=null;paused=false;selected=null;hover=null;$('home').hidden=false;$('battle').hidden=true;document.body.classList.remove('is-playing');document.querySelector('.site-header').classList.remove('compact');refreshCompleted();$('start').focus({preventScroll:true})}
 function refreshCompleted(){for(const id of [1,2])$(`complete-${id}`).textContent=completed.includes(id)?'✓ 已守护':''}
 function showModal(type,html){returnFocus=document.activeElement;modalType=type;$('modal-content').innerHTML=html;$('modal').hidden=false;$('modal-close').hidden=type==='result';if(game?.status==='playing')paused=true;requestAnimationFrame(()=>($('modal-content').querySelector('button')||$('modal-close')).focus({preventScroll:true}))}
-function closeModal(resume=true){$('modal').hidden=true;modalType='';if(resume&&game?.status==='playing'&&!matchMedia('(orientation: portrait)').matches)paused=false;returnFocus?.focus?.({preventScroll:true})}
+function closeModal(resume=true){$('modal').hidden=true;modalType='';if(resume&&game?.status==='playing'&&!isPortraitBlocked())paused=false;returnFocus?.focus?.({preventScroll:true})}
 function modalArt(mood='happy') {const el=document.querySelector('.modal-illustration');if(!el)return;const c=el.getContext('2d');c.clearRect(0,0,520,120);drawPlant(c,'sunflower',193,108,1.12,artTime);drawPlant(c,'peashooter',264,108,1.1,artTime);drawSticker(c,mood==='happy'?'heart':'cloud',330,72,.68,artTime);drawPlant(c,'cherry',332,111,.5,artTime)}
 function showHelp(){showModal('help',`<div class="eyebrow">GARDEN HANDBOOK</div><h2 id="modal-title">小院守护手册</h2><p>点击植物卡，再点草坪，就种好啦。<br>守住 5 条草坪，不让僵尸走进左侧的小院。</p><div class="guide-plants">${types.map(t=>`<div class="guide-plant"><canvas data-plant="${t}" width="100" height="105"></canvas>${PLANTS[t].name}<small>☀ ${PLANTS[t].cost}</small></div>`).join('')}</div><div class="rules-list"><div class="rule"><strong>01 · 让阳光多起来</strong><p>点击掉落的阳光获得 25 阳光。先在左侧种向日葵，会持续生产阳光。</p></div><div class="rule"><strong>02 · 一行一行守护</strong><p>射手自动攻击同一行。坚果挡住僵尸，寒冰射手能让它们慢下来。</p></div><div class="rule"><strong>03 · 给花园一点帮手</strong><p>樱桃炸弹爆炸覆盖周围 3×3 格。卡片要等冷却，铲除不返还阳光。</p></div><div class="rule"><strong>04 · 守到最后就赢啦</strong><p>每行小推车只救场一次。所有波次清空即胜利，僵尸闯进小院则失败。</p></div></div><div class="modal-actions"><button class="primary-btn" id="got-it">明白啦，开始守护</button></div><p>电脑：1–5 选植物，6 选铲子，空格暂停，Esc 取消选择。<br>手机：横屏点按即可，右上角可尝试全屏。</p>`);document.querySelectorAll('[data-plant]').forEach(el=>drawPlant(el.getContext('2d'),el.dataset.plant,50,92,1.15,0));$('got-it').onclick=()=>closeModal()}
 function showPause(){if(!game||game.status!=='playing')return;showModal('pause',`<div class="eyebrow">TAKE A LITTLE BREAK</div><canvas class="modal-illustration" width="520" height="120"></canvas><h2 id="modal-title">花园等你回来</h2><p>阳光和小伙伴都暂停了，慢慢来。</p><div class="modal-actions"><button class="primary-btn" id="resume">继续守护 <span>→</span></button><button class="secondary-btn" id="retry">重新开始</button><button class="secondary-btn" id="back-home">返回小院</button></div>`);modalArt();$('resume').onclick=()=>closeModal();$('retry').onclick=()=>confirmRestart();$('back-home').onclick=()=>goHome()}
@@ -117,22 +171,23 @@ function note(freq,duration=.1,delay=0,volume=.035,wave='sine'){if(muted||!audio
 function playSound(type){if(muted)return;switch(type){case'collect':note(784,.11);note(1046,.14,.08);break;case'plant':note(392,.11,0,.03,'triangle');note(523,.13,.07);break;case'shoot':note(270,.055,0,.007,'triangle');break;case'hit':note(170,.04,0,.005);break;case'explode':note(90,.35,0,.045,'triangle');note(65,.3,.07,.03);break;case'wave':note(330,.2,0,.045);note(294,.2,.21,.035);note(262,.3,.42);break;case'win':[523,659,784,1046].forEach((f,i)=>note(f,.3,i*.13,.055));break;case'lose':[392,349,294,262].forEach((f,i)=>note(f,.25,i*.18));break;case'shovel':note(180,.07,0,.02,'triangle');break;case'mower':note(130,.5,0,.015,'sawtooth');break}}
 function updateSoundButton(){$('sound').classList.toggle('enabled',!muted);$('sound').title=muted?'开启音效':'关闭音效';$('sound').setAttribute('aria-label',$('sound').title);$('sound').setAttribute('aria-pressed',String(!muted))}
 
-function point(event){const r=canvas.getBoundingClientRect();return {x:(event.clientX-r.left)*1120/r.width,y:(event.clientY-r.top)*650/r.height}}
+function point(event){const r=canvas.getBoundingClientRect();if(document.body.classList.contains('game-rotated'))return {x:(event.clientY-r.top)*1120/r.height,y:(r.right-event.clientX)*650/r.width};return {x:(event.clientX-r.left)*1120/r.width,y:(event.clientY-r.top)*650/r.height}}
 function cell(p){const col=Math.floor((p.x-BOARD.x)/BOARD.cellW),row=Math.floor((p.y-BOARD.y)/BOARD.cellH);return row>=0&&row<5&&col>=0&&col<9?{row,col}:null}
 canvas.addEventListener('pointermove',e=>{hover=cell(point(e))});canvas.addEventListener('pointerleave',()=>hover=null);
 canvas.addEventListener('pointerdown',e=>{e.preventDefault();if(!game||paused||game.status!=='playing')return;initAudio();const p=point(e);const sun=[...game.suns].reverse().find(s=>Math.hypot(s.x-p.x,s.y-p.y)<32);if(sun){const f={x:sun.x,y:sun.y,age:0};if(game.collectSun(sun.id))flyers.push(f);updateHUD();return}const target=cell(p);if(!target)return;if(!selected)return toast('先点左侧植物卡，再点草坪种植。');if(selected==='shovel'){if(game.removePlant(target.row,target.col)){selected=null;updateSelection()}else toast('这里还没有植物哦。')}else{const result=game.plant(selected,target.row,target.col);if(result.ok){selected=null;updateSelection()}else toast(result.reason||'暂时不能种在这里。')}updateHUD()});
 canvas.addEventListener('contextmenu',e=>{e.preventDefault();selected=null;updateSelection()});
 $('start').onclick=()=>startGame(1);document.querySelectorAll('[data-level]').forEach(el=>el.onclick=()=>startGame(Number(el.dataset.level)));
-$('pause').onclick=showPause;$('help').onclick=showHelp;$('modal-close').onclick=()=>closeModal();$('shovel').onclick=()=>select('shovel');$('portrait-back').onclick=goHome;
+ $('pause').onclick=showPause;$('help').onclick=showHelp;$('modal-close').onclick=()=>closeModal();$('shovel').onclick=()=>select('shovel');$('portrait-back').onclick=goHome;$('game-fullscreen').onclick=()=>isGameFullscreen()?exitGameFullscreen():enterGameFullscreen();
 $('brand').onclick=()=>{if(game?.status==='playing')showPause();else goHome()};
 $('sound').onclick=()=>{muted=!muted;store.set('sound',!muted);initAudio();updateSoundButton();if(!muted)note(659,.16)};
-$('fullscreen').onclick=async()=>{try{if(document.fullscreenElement){await document.exitFullscreen()}else{await document.documentElement.requestFullscreen();try{await screen.orientation.lock('landscape')}catch{}}}catch{if(view==='battle')toast('当前浏览器不支持全屏，横放手机也能完整游玩。');else{showModal('fullscreen','<h2 id="modal-title">横屏也能好好玩</h2><p>当前浏览器不支持网页全屏。<br>手机横放后，花园会自动适配屏幕。</p><div class="modal-actions"><button class="primary-btn" id="fullscreen-ok">知道啦</button></div>');$('fullscreen-ok').onclick=()=>closeModal()}}};
+ $('fullscreen').onclick=async()=>{if(view==='battle'){if(isGameFullscreen())await exitGameFullscreen();else await enterGameFullscreen();return}showModal('fullscreen','<h2 id="modal-title">横屏也能好好玩</h2><p>开始守护后，手机会尝试自动进入沉浸全屏。<br>如果浏览器不允许，请在浏览器菜单里选择“全屏”或“在浏览器打开”。</p><div class="modal-actions"><button class="primary-btn" id="fullscreen-ok">知道啦</button></div>');$('fullscreen-ok').onclick=()=>closeModal()};
 document.addEventListener('keydown',e=>{
   if(!$('modal').hidden){if((e.key==='Escape'&&modalType!=='result')||(e.code==='Space'&&modalType==='pause')){e.preventDefault();closeModal()}if(e.key==='Tab'){const buttons=[...$('modal').querySelectorAll('button:not([hidden])')].filter(b=>b.getClientRects().length);const first=buttons[0],end=buttons.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();end?.focus()}else if(!e.shiftKey&&document.activeElement===end){e.preventDefault();first?.focus()}}return}
   if(view!=='battle'||!game)return;if(e.repeat)return;
   if(e.code==='Space'){e.preventDefault();showPause()}else if(e.key==='Escape'){selected=null;updateSelection()}else if('12345'.includes(e.key)&&e.key.length===1){e.preventDefault();select(types[Number(e.key)-1])}else if(e.key==='6'){e.preventDefault();select('shovel')}
 });
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&game?.status==='playing'&&!paused)showPause()});
-const portrait=matchMedia('(orientation: portrait)');portrait.addEventListener('change',e=>{if(game?.status!=='playing')return;if(e.matches){paused=true}else if($('modal').hidden){showPause()}});
+document.addEventListener('fullscreenchange',syncFullscreenState);
+const portrait=matchMedia('(orientation: portrait)');portrait.addEventListener('change',()=>syncFullscreenState());
 function frame(ms){const dt=Math.min(.05,(ms-last)/1000||0);last=ms;artTime+=dt;if(view==='home'){renderHero(reduced?0:artTime)}else if(game){if(!paused)game.update(dt);flyers.forEach(f=>f.age+=paused?0:dt);flyers=flyers.filter(f=>f.age<.7);if(toastLeft>0){toastLeft-=dt;if(toastLeft<=0)$('toast').classList.remove('show')}if(bannerLeft>0&&!paused){bannerLeft-=dt;if(bannerLeft<=0)$('wave-banner').classList.remove('show')}renderGame(reduced?0:game.time);updateHUD()}requestAnimationFrame(frame)}
-initCards();updateSoundButton();refreshCompleted();requestAnimationFrame(frame);
+initCards();updateSoundButton();updateFullscreenControls();refreshCompleted();requestAnimationFrame(frame);
